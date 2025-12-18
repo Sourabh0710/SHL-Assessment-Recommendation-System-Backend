@@ -7,64 +7,58 @@ class SHLRecommender:
     def __init__(self, csv_path: str):
         self.df = pd.read_csv(csv_path)
 
-        self.df.columns = self.df.columns.str.strip().str.lower()
+        self.df.columns = [c.strip().lower() for c in self.df.columns]
 
-
-        if "name" in self.df.columns:
-            self.name_col = "name"
-        elif "assessment_name" in self.df.columns:
+        if "assessment_name" in self.df.columns:
             self.name_col = "assessment_name"
-        elif "assesment_name" in self.df.columns: 
-            self.name_col = "assesment_name"
+        elif "name" in self.df.columns:
+            self.name_col = "name"
         else:
             raise ValueError(
-                "CSV must contain 'name', 'assessment_name', or 'assesment_name'"
+                "CSV must contain either 'assessment_name' or 'name' column"
             )
 
-        required_columns = {self.name_col, "url", "test_type"}
-        missing = required_columns - set(self.df.columns)
-        if missing:
-            raise ValueError(f"Missing required columns in CSV: {missing}")
+        self.test_type_col = "test_type" if "test_type" in self.df.columns else None
+        self.duration_col = "duration" if "duration" in self.df.columns else None
+        self.remote_col = "remote_testing" if "remote_testing" in self.df.columns else None
+        self.adaptive_col = "adaptive_irt" if "adaptive_irt" in self.df.columns else None
+        self.url_col = "url" if "url" in self.df.columns else None
 
-        self.df["combined_text"] = (
-            self.df[self.name_col].fillna("") + " " +
-            self.df["test_type"].fillna("")
-        )
+        self.df["text"] = self.df[self.name_col].fillna("")
 
-        self.df = self.df[self.df["combined_text"].str.strip() != ""]
-        
         self.vectorizer = TfidfVectorizer(
             stop_words="english",
             ngram_range=(1, 2)
         )
 
-        self.tfidf_matrix = self.vectorizer.fit_transform(
-            self.df["combined_text"]
-        )
+        self.tfidf_matrix = self.vectorizer.fit_transform(self.df["text"])
 
     def recommend(self, query: str, max_results: int = 10):
         if not query or not query.strip():
             return []
 
-        query_vector = self.vectorizer.transform([query])
-        scores = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
+        try:
+            query_vec = self.vectorizer.transform([query])
+            scores = cosine_similarity(query_vec, self.tfidf_matrix).flatten()
+        except ValueError:
+            return []
 
-        self.df["score"] = scores
-
-        top = (
-            self.df.sort_values("score", ascending=False)
-            .head(max_results)
-        )
+        top_indices = scores.argsort()[::-1][:max_results]
 
         results = []
-        for _, row in top.iterrows():
+        for idx in top_indices:
+            if scores[idx] <= 0:
+                continue
+
+            row = self.df.iloc[idx]
+
             results.append({
-                "assesment_name": row.get(self.name_col, ""),
-                "test_type": row.get("test_type", ""),
-                "duration": row.get("duration"),
-                "remote_testing": row.get("remote_testing"),
-                "adaptive_irt": row.get("adaptive_irt"),
-                "url": row.get("url")
+                "assessment_name": row.get(self.name_col, ""),
+                "test_type": row.get(self.test_type_col, "") if self.test_type_col else "",
+                "duration": row.get(self.duration_col) if self.duration_col else None,
+                "remote_testing": row.get(self.remote_col) if self.remote_col else None,
+                "adaptive_irt": row.get(self.adaptive_col) if self.adaptive_col else None,
+                "url": row.get(self.url_col) if self.url_col else None,
             })
 
         return results
