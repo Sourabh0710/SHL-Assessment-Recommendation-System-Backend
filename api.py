@@ -25,6 +25,7 @@ class RecommendRequest(BaseModel):
     text: str
     max_results: int = 10
 
+
 class RecommendResponse(BaseModel):
     assesment_name: str
     test_type: str
@@ -33,22 +34,39 @@ class RecommendResponse(BaseModel):
     adaptive_irt: str | None = None
     url: str | None = None
 
-
 @app.get("/")
-def health_check():
+def root():
+    return {
+        "message": "SHL Assessment Recommender API is running",
+        "endpoints": [
+            {
+                "path": "/recommend",
+                "method": "POST",
+                "description": "Get SHL assessment recommendations based on a job description or query"
+            },
+            {
+                "path": "/health",
+                "method": "GET",
+                "description": "Health check endpoint"
+            }
+        ],
+        "version": "1.0.0"
+    }
+
+@app.get("/health")
+def health():
     return {"status": "ok"}
+
 
 @app.post("/recommend", response_model=List[RecommendResponse])
 def recommend(request: RecommendRequest):
     try:
         recommender = get_recommender()
+
         results = recommender.recommend(
             query=request.text,
             max_results=request.max_results
         )
-
-        if not results:
-            return []
 
         return results
 
