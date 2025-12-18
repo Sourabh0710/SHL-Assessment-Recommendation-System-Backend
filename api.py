@@ -9,18 +9,17 @@ app = FastAPI(
     description="Recommend SHL assessments based on a text query",
     version="1.0.0"
 )
-recommender = None
+
+_recommender = None
 
 def get_recommender():
-    global recommender
-    if recommender is None:
+    global _recommender
+    if _recommender is None:
         csv_path = "shl_catalog.csv"
         if not os.path.exists(csv_path):
             raise FileNotFoundError(f"CSV file not found at path: {csv_path}")
-
-        recommender = SHLRecommender(csv_path)
-
-    return recommender
+        _recommender = SHLRecommender(csv_path)
+    return _recommender
 
 class RecommendRequest(BaseModel):
     text: str
@@ -34,21 +33,25 @@ class RecommendResponse(BaseModel):
     adaptive_irt: str | None = None
     url: str | None = None
 
+
 @app.get("/")
-def health():
+def health_check():
     return {"status": "ok"}
 
 @app.post("/recommend", response_model=List[RecommendResponse])
 def recommend(request: RecommendRequest):
     try:
-        rec = get_recommender()
-        results = rec.recommend(
+        recommender = get_recommender()
+        results = recommender.recommend(
             query=request.text,
             max_results=request.max_results
         )
+
         if not results:
             return []
+
         return results
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
