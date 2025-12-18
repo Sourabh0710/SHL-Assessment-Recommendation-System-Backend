@@ -7,7 +7,8 @@ class SHLRecommender:
     def __init__(self, csv_path: str):
         self.df = pd.read_csv(csv_path)
         self.df.columns = self.df.columns.str.strip().str.lower()
-        required_cols = ["assesment_name", "test_type"]
+
+        required_cols = ["assesment_name", "test_type", "url"]
         for col in required_cols:
             if col not in self.df.columns:
                 self.df[col] = ""
@@ -25,14 +26,13 @@ class SHLRecommender:
             return []
 
         query_vec = self.vectorizer.transform([query])
-        similarities = cosine_similarity(query_vec, self.tfidf_matrix).flatten()
+        scores = cosine_similarity(query_vec, self.tfidf_matrix).flatten()
 
-        top_indices = similarities.argsort()[::-1][:max_results]
+        top_indices = scores.argsort()[::-1][:max_results]
 
         results = []
         for idx in top_indices:
             row = self.df.iloc[idx]
-
             results.append({
                 "assesment_name": row.get("assesment_name", ""),
                 "test_type": row.get("test_type", ""),
