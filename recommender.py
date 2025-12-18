@@ -2,26 +2,33 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-
 class SHLRecommender:
     def __init__(self, csv_path: str):
-
         self.df = pd.read_csv(csv_path)
 
         self.df.columns = self.df.columns.str.strip().str.lower()
 
-        required_columns = {"name", "url", "test_type"}
+        if "name" in self.df.columns:
+            self.name_col = "name"
+        elif "assesment_name" in self.df.columns:
+            self.name_col = "assesment_name"
+        else:
+            raise ValueError(
+                "CSV must contain either 'name' or 'assesment_name' column"
+            )
+
+        required_columns = {self.name_col, "url", "test_type"}
         missing = required_columns - set(self.df.columns)
         if missing:
             raise ValueError(f"Missing required columns in CSV: {missing}")
 
         self.df["combined_text"] = (
-            self.df["name"].fillna("") + " " +
+            self.df[self.name_col].fillna("") + " " +
             self.df["test_type"].fillna("")
         )
 
         self.df = self.df[self.df["combined_text"].str.strip() != ""]
-        
+
         self.vectorizer = TfidfVectorizer(
             stop_words="english",
             ngram_range=(1, 2)
@@ -36,20 +43,19 @@ class SHLRecommender:
             return []
 
         query_vector = self.vectorizer.transform([query])
-        similarities = cosine_similarity(
-            query_vector, self.tfidf_matrix
-        ).flatten()
+        scores = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
 
-        self.df["score"] = similarities
+        self.df["score"] = scores
 
-        top_results = self.df.sort_values(
-            by="score", ascending=False
-        ).head(max_results)
+        top_results = (
+            self.df.sort_values(by="score", ascending=False)
+            .head(max_results)
+        )
 
-        recommendations = []
+        results = []
         for _, row in top_results.iterrows():
-            recommendations.append({
-                "assesment_name": row.get("name", ""),
+            results.append({
+                "assesment_name": row.get(self.name_col, ""),
                 "test_type": row.get("test_type", ""),
                 "duration": row.get("duration"),
                 "remote_testing": row.get("remote_testing"),
@@ -57,4 +63,4 @@ class SHLRecommender:
                 "url": row.get("url")
             })
 
-        return recommendations
+        return results
