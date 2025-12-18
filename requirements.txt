@@ -3,7 +3,6 @@ pandas
 numpy
 scikit-learn
 sentence-transformers
-torch
 fastapi
 uvicorn
-
+torch==2.1.0
