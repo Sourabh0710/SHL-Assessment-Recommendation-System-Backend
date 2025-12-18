@@ -5,62 +5,56 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 class SHLRecommender:
     def __init__(self, csv_path: str):
+
         self.df = pd.read_csv(csv_path)
 
         self.df.columns = self.df.columns.str.strip().str.lower()
 
-        required_cols = ["assesment_name", "test_type", "url"]
-        for col in required_cols:
-            if col not in self.df.columns:
-                self.df[col] = ""
+        required_columns = {"name", "url", "test_type"}
+        missing = required_columns - set(self.df.columns)
+        if missing:
+            raise ValueError(f"Missing required columns in CSV: {missing}")
 
-        self.df["text"] = (
-            self.df["assesment_name"].fillna("") + " " +
+        self.df["combined_text"] = (
+            self.df["name"].fillna("") + " " +
             self.df["test_type"].fillna("")
         )
 
+        self.df = self.df[self.df["combined_text"].str.strip() != ""]
+        
         self.vectorizer = TfidfVectorizer(
-            lowercase=True,
-            token_pattern=r"(?u)\b\w+\b"
+            stop_words="english",
+            ngram_range=(1, 2)
         )
 
-        self.tfidf_matrix = self.vectorizer.fit_transform(self.df["text"])
+        self.tfidf_matrix = self.vectorizer.fit_transform(
+            self.df["combined_text"]
+        )
 
     def recommend(self, query: str, max_results: int = 10):
         if not query or not query.strip():
             return []
 
-        query = query.strip().lower()
+        query_vector = self.vectorizer.transform([query])
+        similarities = cosine_similarity(
+            query_vector, self.tfidf_matrix
+        ).flatten()
 
-        try:
-            query_vec = self.vectorizer.transform([query])
-        except ValueError:
-            return []
+        self.df["score"] = similarities
 
-        if query_vec.nnz == 0:
-            fallback = self.df.head(max_results)
-            return fallback.apply(lambda row: {
-                "assesment_name": row.get("assesment_name", ""),
+        top_results = self.df.sort_values(
+            by="score", ascending=False
+        ).head(max_results)
+
+        recommendations = []
+        for _, row in top_results.iterrows():
+            recommendations.append({
+                "assesment_name": row.get("name", ""),
                 "test_type": row.get("test_type", ""),
-                "duration": row.get("duration", ""),
-                "remote_testing": row.get("remote_testing", ""),
-                "adaptive_irt": row.get("adaptive_irt", ""),
-                "url": row.get("url", "")
-            }, axis=1).tolist()
-
-        scores = cosine_similarity(query_vec, self.tfidf_matrix).flatten()
-        top_indices = scores.argsort()[::-1][:max_results]
-
-        results = []
-        for idx in top_indices:
-            row = self.df.iloc[idx]
-            results.append({
-                "assesment_name": row.get("assesment_name", ""),
-                "test_type": row.get("test_type", ""),
-                "duration": row.get("duration", ""),
-                "remote_testing": row.get("remote_testing", ""),
-                "adaptive_irt": row.get("adaptive_irt", ""),
-                "url": row.get("url", "")
+                "duration": row.get("duration"),
+                "remote_testing": row.get("remote_testing"),
+                "adaptive_irt": row.get("adaptive_irt"),
+                "url": row.get("url")
             })
 
-        return results
+        return recommendations
