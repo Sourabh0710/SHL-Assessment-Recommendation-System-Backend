@@ -2,19 +2,23 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+
 class SHLRecommender:
     def __init__(self, csv_path: str):
         self.df = pd.read_csv(csv_path)
 
         self.df.columns = self.df.columns.str.strip().str.lower()
 
+
         if "name" in self.df.columns:
             self.name_col = "name"
-        elif "assesment_name" in self.df.columns:
+        elif "assessment_name" in self.df.columns:
+            self.name_col = "assessment_name"
+        elif "assesment_name" in self.df.columns: 
             self.name_col = "assesment_name"
         else:
             raise ValueError(
-                "CSV must contain either 'name' or 'assesment_name' column"
+                "CSV must contain 'name', 'assessment_name', or 'assesment_name'"
             )
 
         required_columns = {self.name_col, "url", "test_type"}
@@ -28,7 +32,7 @@ class SHLRecommender:
         )
 
         self.df = self.df[self.df["combined_text"].str.strip() != ""]
-
+        
         self.vectorizer = TfidfVectorizer(
             stop_words="english",
             ngram_range=(1, 2)
@@ -47,13 +51,13 @@ class SHLRecommender:
 
         self.df["score"] = scores
 
-        top_results = (
-            self.df.sort_values(by="score", ascending=False)
+        top = (
+            self.df.sort_values("score", ascending=False)
             .head(max_results)
         )
 
         results = []
-        for _, row in top_results.iterrows():
+        for _, row in top.iterrows():
             results.append({
                 "assesment_name": row.get(self.name_col, ""),
                 "test_type": row.get("test_type", ""),
