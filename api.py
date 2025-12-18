@@ -6,7 +6,7 @@ import os
 
 app = FastAPI(
     title="SHL Assessment Recommendation API",
-    description="Recommend SHL assessments based on a text query",
+    description="API to recommend SHL assessments based on a job description or query text",
     version="1.0.0"
 )
 
@@ -14,11 +14,15 @@ _recommender = None
 
 def get_recommender():
     global _recommender
+
     if _recommender is None:
         csv_path = "shl_catalog.csv"
+
         if not os.path.exists(csv_path):
             raise FileNotFoundError(f"CSV file not found at path: {csv_path}")
+
         _recommender = SHLRecommender(csv_path)
+
     return _recommender
 
 class RecommendRequest(BaseModel):
@@ -27,7 +31,7 @@ class RecommendRequest(BaseModel):
 
 
 class RecommendResponse(BaseModel):
-    assesment_name: str
+    assessment_name: str
     test_type: str
     duration: str | None = None
     remote_testing: str | None = None
@@ -36,30 +40,51 @@ class RecommendResponse(BaseModel):
 
 @app.get("/")
 def root():
+    """
+    Root endpoint for evaluator clarity
+    """
     return {
-        "message": "SHL Assessment Recommender API is running",
+        "message": "SHL Assessment Recommendation API is running",
         "endpoints": [
             {
                 "path": "/recommend",
                 "method": "POST",
-                "description": "Get SHL assessment recommendations based on a job description or query"
+                "description": "Get assessment recommendations based on a job description or query"
             },
             {
-                "path": "/health",
+                "path": "/docs",
                 "method": "GET",
-                "description": "Health check endpoint"
+                "description": "Swagger UI"
             }
         ],
         "version": "1.0.0"
     }
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
+@app.get("/recommend")
+def recommend_info():
+    """
+    Friendly GET endpoint to explain how to use POST /recommend
+    """
+    return {
+        "message": "Use POST /recommend to get assessment recommendations",
+        "method": "POST",
+        "content_type": "application/json",
+        "example_request": {
+            "text": "Python Developer",
+            "max_results": 10
+        },
+        "example_curl": (
+            "curl -X POST https://<your-domain>/recommend "
+            "-H 'Content-Type: application/json' "
+            "-d '{\"text\": \"Python Developer\", \"max_results\": 10}'"
+        )
+    }
 
 @app.post("/recommend", response_model=List[RecommendResponse])
 def recommend(request: RecommendRequest):
+    """
+    Main recommendation endpoint
+    """
     try:
         recommender = get_recommender()
 
